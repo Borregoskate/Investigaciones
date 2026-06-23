@@ -504,7 +504,7 @@ if uploaded_files:
     # ============================================================
     # BLOQUE 6: ANÁLISIS DETALLADO DE PROVEEDORES
     # ============================================================
-    st.header("🏢 ANÁLISIS DETALLADO DE PROVEEDORES")
+    st.header("🏢 BLOQUE 7: ANÁLISIS DETALLADO DE PROVEEDORES")
     st.markdown("**Desglose completo de cada proveedor: investigaciones, claves, precios, países de origen y análisis de variaciones**")
 
     if 'RAZON SOCIAL' in df_combined.columns and 'RFC' in df_combined.columns:
@@ -524,6 +524,33 @@ if uploaded_files:
                 # Filtrar datos del proveedor seleccionado
                 df_proveedor = df_combined[df_combined['RAZON SOCIAL'] == proveedor_seleccionado].copy()
                 
+                # ============================================================
+                # FUNCIÓN PARA EXTRAER NÚMERO DE INVESTIGACIÓN Y ORDENAR
+                # ============================================================
+                def extraer_numero_investigacion(nombre_archivo):
+                    """Extrae el número de investigación del nombre del archivo"""
+                    try:
+                        # Buscar patrón IM-XXX o IM-XXXX
+                        import re
+                        match = re.search(r'IM-(\d+)', str(nombre_archivo))
+                        if match:
+                            return int(match.group(1))
+                        else:
+                            # Si no encuentra IM-, buscar cualquier número
+                            match = re.search(r'(\d+)', str(nombre_archivo))
+                            if match:
+                                return int(match.group(1))
+                            else:
+                                return 999  # Valor alto para archivos sin número
+                    except:
+                        return 999
+                
+                # Agregar columna con número de investigación para ordenar
+                df_proveedor['NUM_INVESTIGACION'] = df_proveedor['ARCHIVO'].apply(extraer_numero_investigacion)
+                
+                # Ordenar todo el dataframe por número de investigación
+                df_proveedor = df_proveedor.sort_values('NUM_INVESTIGACION')
+                
                 # Métricas del proveedor
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
@@ -538,18 +565,19 @@ if uploaded_files:
                 
                 st.subheader(f"📋 Detalle completo de {proveedor_seleccionado}")
                 
-                # Mostrar todas las participaciones del proveedor
+                # Mostrar todas las participaciones del proveedor (ordenado por número de investigación)
                 columnas_mostrar_prov = ['CLAVE', 'ARCHIVO', 'DESCRIPCION', 'PRECIO UNITARIO', 'PAIS DE ORIGEN', 'CANTIDAD OFERTADA']
                 columnas_existentes_prov = [col for col in columnas_mostrar_prov if col in df_proveedor.columns]
                 
-                # Ordenar por clave y archivo
-                df_proveedor_mostrar = df_proveedor[columnas_existentes_prov].sort_values(['CLAVE', 'ARCHIVO'])
+                # Ordenar por número de investigación y luego por clave
+                df_proveedor_mostrar = df_proveedor.sort_values(['NUM_INVESTIGACION', 'CLAVE'])[columnas_existentes_prov]
                 st.dataframe(df_proveedor_mostrar, use_container_width=True, hide_index=True)
                 
                 # ============================================================
                 # ANÁLISIS DE VARIACIONES POR CLAVE (SOLO CLAVES REPETIDAS)
                 # ============================================================
                 st.subheader("📊 Análisis de variaciones por clave (claves con múltiples investigaciones)")
+                st.info("📌 Las gráficas y tablas se ordenan por número de investigación (IM-003, IM-009, IM-013, etc.)")
                 
                 # Identificar claves que aparecen en múltiples investigaciones
                 claves_conteo = df_proveedor.groupby('CLAVE')['ARCHIVO'].nunique()
@@ -559,7 +587,10 @@ if uploaded_files:
                     st.info(f"🔍 Se encontraron {len(claves_repetidas)} claves con participación en múltiples investigaciones")
                     
                     for clave in sorted(claves_repetidas):
-                        df_clave_prov = df_proveedor[df_proveedor['CLAVE'] == clave]
+                        df_clave_prov = df_proveedor[df_proveedor['CLAVE'] == clave].copy()
+                        
+                        # Ordenar por número de investigación
+                        df_clave_prov = df_clave_prov.sort_values('NUM_INVESTIGACION')
                         
                         st.markdown(f"**🔑 Clave: {clave}**")
                         
@@ -568,12 +599,12 @@ if uploaded_files:
                             desc = df_clave_prov['DESCRIPCION'].iloc[0]
                             st.info(f"📝 {desc}")
                         
-                        # Crear tabla de precios por investigación
+                        # Crear tabla de precios por investigación (ordenada cronológicamente)
                         datos_variacion = []
-                        for archivo in sorted(df_clave_prov['ARCHIVO'].unique()):
-                            row = df_clave_prov[df_clave_prov['ARCHIVO'] == archivo].iloc[0]
+                        for _, row in df_clave_prov.iterrows():
                             datos_variacion.append({
-                                'Investigación': archivo,
+                                'Investigación': row['ARCHIVO'],
+                                'Número': row['NUM_INVESTIGACION'],
                                 'Precio': row['PRECIO UNITARIO'],
                                 'País de origen': row.get('PAIS DE ORIGEN', 'N/A'),
                                 'Cantidad': row.get('CANTIDAD OFERTADA', 'N/A')
@@ -581,12 +612,15 @@ if uploaded_files:
                         
                         df_variacion = pd.DataFrame(datos_variacion)
                         
+                        # Ordenar explícitamente por número de investigación
+                        df_variacion = df_variacion.sort_values('Número')
+                        
                         # Calcular variaciones
                         if len(df_variacion) > 1:
-                            # Ordenar por precio
-                            df_variacion = df_variacion.sort_values('Precio')
+                            # Guardar el orden original para la gráfica
+                            orden_investigaciones = df_variacion['Investigación'].tolist()
                             
-                            # Calcular diferencias
+                            # Calcular diferencias en el orden cronológico
                             df_variacion['Diferencia vs anterior'] = df_variacion['Precio'].diff()
                             df_variacion['% variación'] = df_variacion['Precio'].pct_change() * 100
                             
@@ -602,9 +636,14 @@ if uploaded_files:
                             with col2:
                                 st.metric("💰 Precio más alto", f"${precio_max:,.2f}")
                             with col3:
-                                st.metric("📊 Variación total", f"{variacion_total:.1f}%")
+                                # Mostrar tendencia con flecha
+                                precio_inicial = df_variacion.iloc[0]['Precio']
+                                precio_final = df_variacion.iloc[-1]['Precio']
+                                cambio_total = ((precio_final - precio_inicial) / precio_inicial) * 100 if precio_inicial > 0 else 0
+                                flecha = "📈" if cambio_total > 0 else "📉" if cambio_total < 0 else "➡️"
+                                st.metric("📊 Variación total", f"{flecha} {cambio_total:.1f}%")
                             
-                            # Mostrar tabla detallada con formato
+                            # Mostrar tabla detallada con formato (en orden cronológico)
                             df_variacion_formateada = df_variacion.copy()
                             df_variacion_formateada['Precio'] = df_variacion_formateada['Precio'].apply(lambda x: f"${x:,.2f}")
                             df_variacion_formateada['Diferencia vs anterior'] = df_variacion_formateada['Diferencia vs anterior'].apply(
@@ -614,48 +653,151 @@ if uploaded_files:
                                 lambda x: f"+{x:.1f}%" if pd.notna(x) and x > 0 else f"{x:.1f}%" if pd.notna(x) else ""
                             )
                             
-                            st.dataframe(df_variacion_formateada, use_container_width=True, hide_index=True)
+                            # Mostrar tabla (solo columnas relevantes)
+                            columnas_tabla = ['Investigación', 'Precio', 'Diferencia vs anterior', '% variación', 'País de origen']
+                            st.dataframe(df_variacion_formateada[columnas_tabla], use_container_width=True, hide_index=True)
                             
                             # Análisis de país de origen
                             paises = df_clave_prov['PAIS DE ORIGEN'].unique()
                             if len(paises) > 1 and 'PAIS DE ORIGEN' in df_clave_prov.columns:
                                 st.markdown("**🌍 Cambios en país de origen:**")
-                                for archivo in sorted(df_clave_prov['ARCHIVO'].unique()):
-                                    pais = df_clave_prov[df_clave_prov['ARCHIVO'] == archivo]['PAIS DE ORIGEN'].iloc[0]
-                                    st.write(f"  • {archivo}: {pais}")
+                                for _, row in df_clave_prov.iterrows():
+                                    st.write(f"  • {row['ARCHIVO']}: {row['PAIS DE ORIGEN']}")
                             
-                            # Gráfica de evolución de precios
+                            # ============================================================
+                            # GRÁFICA DE EVOLUCIÓN DE PRECIOS (ORDENADA CRONOLÓGICAMENTE)
+                            # ============================================================
+                            # Asegurarse de que los datos estén en el orden correcto
+                            df_grafica = df_variacion.copy()
+                            df_grafica['Investigación'] = pd.Categorical(
+                                df_grafica['Investigación'], 
+                                categories=orden_investigaciones, 
+                                ordered=True
+                            )
+                            df_grafica = df_grafica.sort_values('Investigación')
+                            
                             fig_prov = px.line(
-                                df_variacion,
+                                df_grafica,
                                 x='Investigación',
                                 y='Precio',
                                 markers=True,
+                                text='Precio',
                                 title=f"Evolución de precios para {proveedor_seleccionado} - Clave {clave}",
-                                labels={"Precio": "Precio ($)", "Investigación": "Investigación"}
+                                labels={"Precio": "Precio ($)", "Investigación": "Investigación"},
+                                line_shape='linear'
                             )
-                            fig_prov.update_traces(texttemplate='$%{y:.2f}', textposition='top center')
+                            
+                            # Personalizar la gráfica
+                            fig_prov.update_traces(
+                                texttemplate='$%{y:.2f}', 
+                                textposition='top center',
+                                marker=dict(size=12),
+                                line=dict(width=3)
+                            )
+                            
+                            # Añadir área sombreada para mejor visualización
+                            fig_prov.update_layout(
+                                xaxis_title="Investigación (Orden cronológico)",
+                                yaxis_title="Precio ($)",
+                                hovermode='x unified',
+                                plot_bgcolor='rgba(0,0,0,0)',
+                                paper_bgcolor='rgba(0,0,0,0)',
+                                xaxis=dict(
+                                    tickangle=45,
+                                    showgrid=True,
+                                    gridcolor='rgba(128,128,128,0.2)'
+                                ),
+                                yaxis=dict(
+                                    showgrid=True,
+                                    gridcolor='rgba(128,128,128,0.2)',
+                                    zeroline=True,
+                                    zerolinecolor='rgba(128,128,128,0.2)'
+                                )
+                            )
+                            
+                            # Si hay al menos 2 puntos, mostrar en gráfica
                             st.plotly_chart(fig_prov, use_container_width=True)
                             
-                            # Análisis de tendencia
+                            # ============================================================
+                            # GRÁFICA DE BARRAS COMPARATIVA
+                            # ============================================================
+                            fig_barras = px.bar(
+                                df_grafica,
+                                x='Investigación',
+                                y='Precio',
+                                text='Precio',
+                                title=f"Comparativa de precios - {clave}",
+                                labels={"Precio": "Precio ($)", "Investigación": "Investigación"},
+                                color='Precio',
+                                color_continuous_scale='Blues'
+                            )
+                            fig_barras.update_traces(
+                                texttemplate='$%{y:.2f}', 
+                                textposition='outside'
+                            )
+                            fig_barras.update_layout(
+                                xaxis_title="Investigación (Orden cronológico)",
+                                yaxis_title="Precio ($)",
+                                showlegend=False
+                            )
+                            st.plotly_chart(fig_barras, use_container_width=True)
+                            
+                            # ============================================================
+                            # ANÁLISIS DE TENDENCIA
+                            # ============================================================
                             precios = df_variacion['Precio'].values
+                            investigaciones = df_variacion['Investigación'].tolist()
+                            
                             if len(precios) >= 2:
-                                tendencia = "📈 Aumento" if precios[-1] > precios[0] else "📉 Disminución" if precios[-1] < precios[0] else "➡️ Estable"
-                                cambio_porcentual = ((precios[-1] - precios[0]) / precios[0]) * 100 if precios[0] > 0 else 0
-                                st.info(f"**Tendencia general:** {tendencia} ({cambio_porcentual:+.1f}% de cambio total)")
-                    
-                else:
-                    st.info("ℹ️ Este proveedor no tiene claves que se repitan en múltiples investigaciones. Todas sus claves son únicas por investigación.")
-                    st.write("Las claves únicas se muestran en la tabla de detalle completo anterior.")
+                                precio_inicial = precios[0]
+                                precio_final = precios[-1]
+                                cambio_total = ((precio_final - precio_inicial) / precio_inicial) * 100 if precio_inicial > 0 else 0
+                                
+                                # Determinar tendencia
+                                if cambio_total > 5:
+                                    tendencia = "📈 Aumento significativo"
+                                    color = "red"
+                                elif cambio_total > 0:
+                                    tendencia = "📈 Aumento leve"
+                                    color = "orange"
+                                elif cambio_total < -5:
+                                    tendencia = "📉 Disminución significativa"
+                                    color = "green"
+                                elif cambio_total < 0:
+                                    tendencia = "📉 Disminución leve"
+                                    color = "lightgreen"
+                                else:
+                                    tendencia = "➡️ Estable"
+                                    color = "blue"
+                                
+                                # Mostrar análisis detallado
+                                st.markdown(f"**📊 Análisis de tendencia:**")
+                                st.markdown(f"• **Tendencia general:** {tendencia}")
+                                st.markdown(f"• **Cambio total:** {cambio_total:+.1f}% (de ${precio_inicial:,.2f} a ${precio_final:,.2f})")
+                                
+                                # Mostrar pasos intermedios
+                                if len(precios) > 2:
+                                    st.markdown(f"• **Número de investigaciones analizadas:** {len(precios)}")
+                                    cambios_intermedios = []
+                                    for i in range(1, len(precios)):
+                                        cambio = ((precios[i] - precios[i-1]) / precios[i-1]) * 100 if precios[i-1] > 0 else 0
+                                        cambios_intermedios.append(f"{investigaciones[i-1]} → {investigaciones[i]}: {cambio:+.1f}%")
+                                    st.markdown("• **Cambios intermedios:**")
+                                    for cambio in cambios_intermedios:
+                                        st.markdown(f"  - {cambio}")
+                        
+                    else:
+                        st.info("ℹ️ Este proveedor no tiene claves que se repitan en múltiples investigaciones. Todas sus claves son únicas por investigación.")
+                        st.write("Las claves únicas se muestran en la tabla de detalle completo anterior.")
                 
                 # ============================================================
-                # RESUMEN GENERAL DEL PROVEEDOR (CORREGIDO)
+                # RESUMEN GENERAL DEL PROVEEDOR
                 # ============================================================
                 st.subheader("📊 Resumen general del proveedor")
                 
                 # Función segura para unir países
                 def join_paises(x):
                     try:
-                        # Convertir a string y eliminar valores vacíos
                         valores = x.astype(str).str.strip()
                         valores = valores[valores != '']
                         valores = valores[valores != 'nan']
@@ -681,14 +823,13 @@ if uploaded_files:
                         return 'N/A'
                 
                 try:
-                    # Crear resumen por clave con funciones seguras
+                    # Crear resumen por clave
                     resumen_proveedor = df_proveedor.groupby('CLAVE').agg({
                         'ARCHIVO': join_archivos,
                         'PRECIO UNITARIO': ['min', 'max', 'mean', 'count'],
                         'PAIS DE ORIGEN': join_paises
                     }).reset_index()
                     
-                    # Renombrar columnas
                     resumen_proveedor.columns = ['CLAVE', 'INVESTIGACIONES', 'PRECIO_MIN', 'PRECIO_MAX', 'PRECIO_PROM', 'TOTAL_REGISTROS', 'PAISES']
                     
                     # Formatear precios
@@ -698,40 +839,9 @@ if uploaded_files:
                     
                     st.dataframe(resumen_proveedor, use_container_width=True, hide_index=True)
                     
-                    # Gráfica de precios promedio por clave
-                    if len(resumen_proveedor) > 0:
-                        # Crear una copia para la gráfica
-                        resumen_graf = resumen_proveedor.copy()
-                        # Convertir a numérico para la gráfica (solo los que no son 'N/A')
-                        resumen_graf['PRECIO_PROM_NUM'] = resumen_graf['PRECIO_PROM'].str.replace('$', '').str.replace(',', '').str.strip()
-                        resumen_graf['PRECIO_PROM_NUM'] = pd.to_numeric(resumen_graf['PRECIO_PROM_NUM'], errors='coerce')
-                        
-                        # Filtrar valores válidos para la gráfica
-                        resumen_graf_valid = resumen_graf[resumen_graf['PRECIO_PROM_NUM'].notna()]
-                        
-                        if len(resumen_graf_valid) > 0:
-                            fig_resumen = px.bar(
-                                resumen_graf_valid,
-                                x='CLAVE',
-                                y='PRECIO_PROM_NUM',
-                                text='PRECIO_PROM',
-                                title=f"Precio promedio por clave - {proveedor_seleccionado}",
-                                labels={"PRECIO_PROM_NUM": "Precio promedio ($)", "CLAVE": "Clave"},
-                                color='PRECIO_PROM_NUM',
-                                color_continuous_scale='Viridis'
-                            )
-                            fig_resumen.update_traces(textposition='outside')
-                            st.plotly_chart(fig_resumen, use_container_width=True)
-                        else:
-                            st.info("ℹ️ No hay datos numéricos válidos para generar la gráfica de precios promedio")
-                    
                 except Exception as e:
                     st.warning(f"⚠️ Error al generar el resumen del proveedor: {str(e)}")
-                    # Mostrar una versión simplificada del resumen
-                    st.write("**Resumen simplificado por clave:**")
-                    resumen_simple = df_proveedor.groupby('CLAVE').size().reset_index(name='TOTAL_REGISTROS')
-                    st.dataframe(resumen_simple, use_container_width=True, hide_index=True)
-                
+                    
         else:
             st.warning("⚠️ No se encontraron proveedores válidos en los datos")
     else:
