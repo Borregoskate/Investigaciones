@@ -718,29 +718,29 @@ if uploaded_files:
                             # Si hay al menos 2 puntos, mostrar en gráfica
                             st.plotly_chart(fig_prov, use_container_width=True)
                             
-                            # ============================================================
-                            # GRÁFICA DE BARRAS COMPARATIVA
-                            # ============================================================
-                            fig_barras = px.bar(
-                                df_grafica,
-                                x='Investigación',
-                                y='Precio',
-                                text='Precio',
-                                title=f"Comparativa de precios - {clave}",
-                                labels={"Precio": "Precio ($)", "Investigación": "Investigación"},
-                                color='Precio',
-                                color_continuous_scale='Blues'
-                            )
-                            fig_barras.update_traces(
-                                texttemplate='$%{y:.2f}', 
-                                textposition='outside'
-                            )
-                            fig_barras.update_layout(
-                                xaxis_title="Investigación (Orden cronológico)",
-                                yaxis_title="Precio ($)",
-                                showlegend=False
-                            )
-                            st.plotly_chart(fig_barras, use_container_width=True)
+                            # # ============================================================
+                            # # GRÁFICA DE BARRAS COMPARATIVA
+                            # # ============================================================
+                            # fig_barras = px.bar(
+                            #     df_grafica,
+                            #     x='Investigación',
+                            #     y='Precio',
+                            #     text='Precio',
+                            #     title=f"Comparativa de precios - {clave}",
+                            #     labels={"Precio": "Precio ($)", "Investigación": "Investigación"},
+                            #     color='Precio',
+                            #     color_continuous_scale='Blues'
+                            # )
+                            # fig_barras.update_traces(
+                            #     texttemplate='$%{y:.2f}', 
+                            #     textposition='outside'
+                            # )
+                            # fig_barras.update_layout(
+                            #     xaxis_title="Investigación (Orden cronológico)",
+                            #     yaxis_title="Precio ($)",
+                            #     showlegend=False
+                            # )
+                            # st.plotly_chart(fig_barras, use_container_width=True)
                             
                             # ============================================================
                             # ANÁLISIS DE TENDENCIA
