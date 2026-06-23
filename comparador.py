@@ -105,12 +105,55 @@ def unificar_proveedores(df):
     
     # Limpiar RFC (eliminar espacios, convertir a mayúsculas)
     df['RFC'] = df['RFC'].astype(str).str.strip().str.upper()
+    df['RAZON SOCIAL'] = df['RAZON SOCIAL'].astype(str).str.strip()
     
-    # Crear un mapeo de RFC al nombre más frecuente
-    rfc_nombre = df.groupby('RFC')['RAZON SOCIAL'].agg(lambda x: x.value_counts().index[0]).to_dict()
+    # Eliminar filas donde RFC esté vacío o sea NaN
+    df = df[df['RFC'].notna() & (df['RFC'] != '') & (df['RFC'] != 'NAN') & (df['RFC'] != 'nan')]
     
-    # Aplicar el mapeo para estandarizar nombres
-    df['RAZON SOCIAL'] = df['RFC'].map(rfc_nombre)
+    # Si después de limpiar no hay datos, retornar el DataFrame original
+    if df.empty:
+        return df
+    
+    # Crear un mapeo de RFC al nombre más común
+    try:
+        # Convertir a tipos nativos de Python para evitar problemas
+        df['RFC'] = df['RFC'].astype(str)
+        df['RAZON SOCIAL'] = df['RAZON SOCIAL'].astype(str)
+        
+        # Función segura para obtener el valor más común
+        def get_most_common(group):
+            # Obtener los valores únicos y su frecuencia
+            if len(group) == 0:
+                return 'N/A'
+            
+            # Usar value_counts y obtener el índice
+            try:
+                counts = group.value_counts()
+                if len(counts) > 0:
+                    # Convertir a lista para evitar problemas de indexación
+                    return counts.index.tolist()[0]
+                else:
+                    return group.iloc[0] if len(group) > 0 else 'N/A'
+            except:
+                # Si falla, usar el primer valor
+                return group.iloc[0] if len(group) > 0 else 'N/A'
+        
+        # Agrupar y aplicar la función
+        rfc_nombre = df.groupby('RFC', as_index=False)['RAZON SOCIAL'].agg(get_most_common)
+        
+        # Convertir a diccionario
+        rfc_nombre_dict = dict(zip(rfc_nombre['RFC'], rfc_nombre['RAZON SOCIAL']))
+        
+        # Aplicar el mapeo para estandarizar nombres
+        df['RAZON SOCIAL'] = df['RFC'].map(rfc_nombre_dict)
+        
+        # Rellenar valores NaN en RAZON SOCIAL
+        df['RAZON SOCIAL'] = df['RAZON SOCIAL'].fillna('N/A')
+        
+    except Exception as e:
+        # Si hay error, mantener los datos sin unificar
+        st.warning(f"⚠️ Error al unificar proveedores: {str(e)}")
+        pass
     
     return df
 
@@ -130,20 +173,29 @@ if uploaded_files:
     
     with st.spinner("Cargando y estandarizando archivos..."):
         for file in uploaded_files:
-            # Leer archivo con la nueva función
-            df = leer_archivo(file)
-            
-            # Guardar nombre del archivo
-            nombre_archivo = file.name.replace('.xlsx', '').replace('.csv', '')
-            nombres_archivos.append(nombre_archivo)
-            
-            # Aplicar estandarización de columnas
-            df = estandarizar_columnas(df)
-            
-            # Agregar columna con el nombre del archivo
-            df['ARCHIVO'] = nombre_archivo
-            
-            all_dfs.append(df)
+            try:
+                # Leer archivo con la nueva función
+                df = leer_archivo(file)
+                
+                # Guardar nombre del archivo
+                nombre_archivo = file.name.replace('.xlsx', '').replace('.csv', '')
+                nombres_archivos.append(nombre_archivo)
+                
+                # Aplicar estandarización de columnas
+                df = estandarizar_columnas(df)
+                
+                # Agregar columna con el nombre del archivo
+                df['ARCHIVO'] = nombre_archivo
+                
+                all_dfs.append(df)
+                
+            except Exception as e:
+                st.error(f"❌ Error al procesar el archivo {file.name}: {str(e)}")
+                continue
+        
+        if not all_dfs:
+            st.error("❌ No se pudieron procesar los archivos. Verifica el formato.")
+            st.stop()
         
         df_combined = pd.concat(all_dfs, ignore_index=True)
         
@@ -167,6 +219,8 @@ if uploaded_files:
         st.write(df_combined.columns.tolist())
         st.write("**Primeras 5 filas de datos:**")
         st.dataframe(df_combined.head(5))
+        st.write("**Tipos de datos:**")
+        st.write(df_combined.dtypes)
     
     st.success(f"✅ Datos cargados: {len(df_combined)} registros de {len(uploaded_files)} investigaciones")
     
@@ -209,7 +263,7 @@ if uploaded_files:
     
     # Obtener claves únicas y ordenarlas
     claves_unicas = sorted(df_combined['CLAVE'].unique())
-    claves_unicas = [c for c in claves_unicas if c and str(c).strip() != '']
+    claves_unicas = [c for c in claves_unicas if c and str(c).strip() != '' and str(c).strip() != 'NAN' and str(c).strip() != 'nan']
     
     if len(claves_unicas) == 0:
         st.warning("⚠️ No se encontraron CLAVES válidas")
@@ -507,7 +561,7 @@ if uploaded_files:
     if 'RAZON SOCIAL' in df_combined.columns and 'RFC' in df_combined.columns:
         # Obtener lista de proveedores únicos
         proveedores_unicos = sorted(df_combined['RAZON SOCIAL'].unique())
-        proveedores_unicos = [p for p in proveedores_unicos if p and str(p).strip() != '']
+        proveedores_unicos = [p for p in proveedores_unicos if p and str(p).strip() != '' and str(p).strip() != 'NAN' and str(p).strip() != 'nan']
         
         if len(proveedores_unicos) > 0:
             # Selector de proveedor
