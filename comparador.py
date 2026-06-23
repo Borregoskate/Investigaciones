@@ -6,7 +6,7 @@ import re
 import numpy as np
 
 st.set_page_config(page_title="Comparador de Investigaciones de Mercado", layout="wide")
-st.title("📊 Comparador de Investigaciones de Mercado 2024")
+st.title("📊 Comparador de Investigaciones de Mercado 2026")
 
 def leer_archivo(file):
     """Lee archivo Excel o CSV y asigna nombres de columnas por posición"""
@@ -232,7 +232,7 @@ if uploaded_files:
     # ============================================================
     # BLOQUE 1: RESUMEN TOTAL
     # ============================================================
-    st.header("📊 BLOQUE 1: RESUMEN TOTAL")
+    st.header("📊 RESUMEN TOTAL")
     st.markdown("**Estadísticas generales de todas las investigaciones cargadas**")
     
     col1, col2, col3 = st.columns(3)
@@ -252,7 +252,7 @@ if uploaded_files:
     # ============================================================
     # BLOQUE 2: ANÁLISIS POR CLAVE
     # ============================================================
-    st.header("🔍 BLOQUE 2: ANÁLISIS POR CLAVE")
+    st.header("🔍 ANÁLISIS POR CLAVE")
     st.markdown("**Selecciona una clave para ver el detalle completo**")
     
     # Verificar que exista la columna CLAVE
@@ -368,7 +368,7 @@ if uploaded_files:
     # ============================================================
     # BLOQUE 3: DETALLE COMPLETO DE CADA INVESTIGACIÓN (FILTRADO POR CLAVE)
     # ============================================================
-    st.header("📁 BLOQUE 3: DETALLE COMPLETO DE CADA INVESTIGACIÓN")
+    st.header("📁 DETALLE COMPLETO DE CADA INVESTIGACIÓN")
     st.markdown(f"**Detalle de la clave {clave_seleccionada if clave_seleccionada else 'seleccionada'} en cada investigación**")
     
     if clave_seleccionada and df_clave_filtrado is not None and len(df_clave_filtrado) > 0:
@@ -409,7 +409,7 @@ if uploaded_files:
     # ============================================================
     # BLOQUE 4: GRÁFICAS COMPARATIVAS
     # ============================================================
-    st.header("📈 BLOQUE 4: GRÁFICAS COMPARATIVAS")
+    st.header("📈 GRÁFICAS COMPARATIVAS")
     st.markdown("**Visualización de precios por investigación y proveedor**")
     
     if clave_seleccionada and df_clave_filtrado is not None and len(df_clave_filtrado) > 0:
@@ -471,7 +471,7 @@ if uploaded_files:
     # ============================================================
     # BLOQUE 5: RESUMEN POR INVESTIGACIÓN (SIN PRECIOS)
     # ============================================================
-    st.header("📊 BLOQUE 5: RESUMEN POR INVESTIGACIÓN")
+    st.header("📊 RESUMEN POR INVESTIGACIÓN")
     st.markdown("**Estadísticas generales de cada investigación (sin precios)**")
     
     if 'ARCHIVO' in df_combined.columns:
@@ -488,74 +488,23 @@ if uploaded_files:
         st.dataframe(resumen_sin_precios, use_container_width=True, hide_index=True)
         
         # Gráfica de resumen
-        fig3 = px.bar(
-            resumen_sin_precios,
-            x='Investigación',
-            y='Total Claves',
-            text='Total Claves',
-            title="Número de claves por investigación",
-            labels={"Total Claves": "Cantidad de claves", "Investigación": "Investigación"},
-            color='Total Claves',
-            color_continuous_scale='Viridis'
-        )
-        fig3.update_traces(textposition='outside')
-        st.plotly_chart(fig3, use_container_width=True)
-    
+        # fig3 = px.bar(
+        #     resumen_sin_precios,
+        #     x='Investigación',
+        #     y='Total Claves',
+        #     text='Total Claves',
+        #     title="Número de claves por investigación",
+        #     labels={"Total Claves": "Cantidad de claves", "Investigación": "Investigación"},
+        #     color='Total Claves',
+        #     color_continuous_scale='Viridis'
+        # )
+        # fig3.update_traces(textposition='outside')
+        # st.plotly_chart(fig3, use_container_width=True)
+       
     # ============================================================
-    # BLOQUE 6: DESCARGA DE ARCHIVO EXCEL
+    # BLOQUE 6: ANÁLISIS DETALLADO DE PROVEEDORES
     # ============================================================
-    st.header("📥 BLOQUE 6: DESCARGA DE ARCHIVO EXCEL")
-    st.markdown("**Exporta toda la información procesada a un archivo Excel**")
-    
-    # Crear un Excel con todas las hojas
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        # Hoja 1: Datos completos
-        df_combined.to_excel(writer, sheet_name="Datos completos", index=False)
-        
-        # Hoja 2: Resumen de claves
-        if 'CLAVE' in df_combined.columns:
-            resumen_claves = df_combined.groupby('CLAVE').agg({
-                'ARCHIVO': lambda x: ', '.join(x.unique()),
-                'RAZON SOCIAL': lambda x: ', '.join(x.unique()),
-                'PRECIO UNITARIO': ['min', 'max', 'mean', 'count'],
-                'DESCRIPCION': 'first'
-            }).reset_index()
-            resumen_claves.columns = ['CLAVE', 'ARCHIVOS', 'PROVEEDORES', 'PRECIO_MIN', 'PRECIO_MAX', 'PRECIO_PROM', 'TOTAL_REGISTROS', 'DESCRIPCION']
-            resumen_claves.to_excel(writer, sheet_name="Resumen por clave", index=False)
-        
-        # Hoja 3: Resumen por archivo
-        if 'ARCHIVO' in df_combined.columns:
-            resumen_archivo = df_combined.groupby('ARCHIVO').agg({
-                'CLAVE': 'nunique',
-                'RAZON SOCIAL': 'nunique',
-                'RFC': 'nunique'
-            }).reset_index()
-            resumen_archivo.columns = ['Investigación', 'Total Claves', 'Total Proveedores', 'Total RFCs']
-            resumen_archivo.to_excel(writer, sheet_name="Resumen por archivo", index=False)
-        
-        # Hoja 4: Lista de proveedores unificados
-        if 'RFC' in df_combined.columns and 'RAZON SOCIAL' in df_combined.columns:
-            proveedores_unificados = df_combined[['RFC', 'RAZON SOCIAL']].drop_duplicates().sort_values('RAZON SOCIAL')
-            proveedores_unificados.to_excel(writer, sheet_name="Proveedores unificados", index=False)
-        
-        # Hoja 5: Detalle de la clave seleccionada (si existe)
-        if clave_seleccionada and df_clave_filtrado is not None and len(df_clave_filtrado) > 0:
-            df_clave_filtrado.to_excel(writer, sheet_name=f"Detalle_{clave_seleccionada}", index=False)
-    
-    st.download_button(
-        label="📥 Descargar análisis completo en Excel",
-        data=output.getvalue(),
-        file_name="analisis_completo_investigaciones.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-    
-    st.success("✅ El archivo Excel contiene: Datos completos, Resumen por clave, Resumen por archivo, Proveedores unificados y Detalle de la clave seleccionada")
-    
-    # ============================================================
-    # BLOQUE 7: ANÁLISIS DETALLADO DE PROVEEDORES
-    # ============================================================
-    st.header("🏢 BLOQUE 7: ANÁLISIS DETALLADO DE PROVEEDORES")
+    st.header("🏢 ANÁLISIS DETALLADO DE PROVEEDORES")
     st.markdown("**Desglose completo de cada proveedor: investigaciones, claves, precios, países de origen y análisis de variaciones**")
 
     if 'RAZON SOCIAL' in df_combined.columns and 'RFC' in df_combined.columns:
@@ -787,6 +736,58 @@ if uploaded_files:
             st.warning("⚠️ No se encontraron proveedores válidos en los datos")
     else:
         st.warning("⚠️ No se encontraron las columnas necesarias para el análisis de proveedores")
+    
+    # ============================================================
+    # BLOQUE 7: DESCARGA DE ARCHIVO EXCEL
+    # ============================================================
+    st.header("📥 DESCARGA DE ARCHIVO EXCEL")
+    st.markdown("**Exporta toda la información procesada a un archivo Excel**")
+    
+    # Crear un Excel con todas las hojas
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # Hoja 1: Datos completos
+        df_combined.to_excel(writer, sheet_name="Datos completos", index=False)
+        
+        # Hoja 2: Resumen de claves
+        if 'CLAVE' in df_combined.columns:
+            resumen_claves = df_combined.groupby('CLAVE').agg({
+                'ARCHIVO': lambda x: ', '.join(x.unique()),
+                'RAZON SOCIAL': lambda x: ', '.join(x.unique()),
+                'PRECIO UNITARIO': ['min', 'max', 'mean', 'count'],
+                'DESCRIPCION': 'first'
+            }).reset_index()
+            resumen_claves.columns = ['CLAVE', 'ARCHIVOS', 'PROVEEDORES', 'PRECIO_MIN', 'PRECIO_MAX', 'PRECIO_PROM', 'TOTAL_REGISTROS', 'DESCRIPCION']
+            resumen_claves.to_excel(writer, sheet_name="Resumen por clave", index=False)
+        
+        # Hoja 3: Resumen por archivo
+        if 'ARCHIVO' in df_combined.columns:
+            resumen_archivo = df_combined.groupby('ARCHIVO').agg({
+                'CLAVE': 'nunique',
+                'RAZON SOCIAL': 'nunique',
+                'RFC': 'nunique'
+            }).reset_index()
+            resumen_archivo.columns = ['Investigación', 'Total Claves', 'Total Proveedores', 'Total RFCs']
+            resumen_archivo.to_excel(writer, sheet_name="Resumen por archivo", index=False)
+        
+        # Hoja 4: Lista de proveedores unificados
+        if 'RFC' in df_combined.columns and 'RAZON SOCIAL' in df_combined.columns:
+            proveedores_unificados = df_combined[['RFC', 'RAZON SOCIAL']].drop_duplicates().sort_values('RAZON SOCIAL')
+            proveedores_unificados.to_excel(writer, sheet_name="Proveedores unificados", index=False)
+        
+        # Hoja 5: Detalle de la clave seleccionada (si existe)
+        if clave_seleccionada and df_clave_filtrado is not None and len(df_clave_filtrado) > 0:
+            df_clave_filtrado.to_excel(writer, sheet_name=f"Detalle_{clave_seleccionada}", index=False)
+    
+    st.download_button(
+        label="📥 Descargar análisis completo en Excel",
+        data=output.getvalue(),
+        file_name="analisis_completo_investigaciones.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    
+    st.success("✅ El archivo Excel contiene: Datos completos, Resumen por clave, Resumen por archivo, Proveedores unificados y Detalle de la clave seleccionada")
+
     
 else:
     st.info("👆 Carga al menos un archivo para comenzar")
